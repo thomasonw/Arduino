@@ -8,23 +8,12 @@ AVR/CORE files.   Allowing updating to support the ATmegaxxM1/C1 line of UC's.
 of a repository.   
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+=============
+=============
+=============
+=============
+=============
+=============
 =============
 
 *Arduino is an open-source physical computing platform based on a simple I/O
