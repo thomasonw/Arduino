@@ -1,7 +1,15 @@
-Arduino
+Arduino - working copy
 ========
 
-* Arduino is an open-source physical computing platform based on a simple I/O
+* This clone of Arduino has been made to gain access to a linked fork of the 
+AVR/CORE files.   Allowing updating to support the ATmegaxxM1/C1 line of UC's.
+
+* I  forked the entire IDE, as I am not aware of how to maintain only a subdirectory
+of a repository.   
+
+
+
+*Arduino is an open-source physical computing platform based on a simple I/O
 board and a development environment that implements the Processing/Wiring
 language. Arduino can be used to develop stand-alone interactive objects or
 can be connected to software on your computer (e.g. Flash, Processing and MaxMSP).
