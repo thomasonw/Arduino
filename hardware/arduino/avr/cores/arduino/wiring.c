@@ -3,6 +3,12 @@
   Part of Arduino - http://www.arduino.cc/
 
   Copyright (c) 2005-2006 David A. Mellis
+  
+    Modified to support ATmega32M1, ATmega64M1, etc.   Mar 2016  
+        Al Thomason:   https://github.com/thomasonw/ATmegaxxM1-C1
+                       http://smartmppt.blogspot.com/search/label/xxM1-IDE
+                      
+                      
 
   This library is free software; you can redistribute it and/or
   modify it under the terms of the GNU Lesser General Public
@@ -381,6 +387,12 @@ void init()
 	sbi(ADCSRA, ADEN);
 #endif
 
+#if defined (__AVR_ATmega32C1__) || defined(__AVR_ATmega64C1__) || defined(__AVR_ATmega16M1__) || defined(__AVR_ATmega32M1__) || defined(__AVR_ATmega64M1__)
+                            // atmega32m1 / atmega64m1 need to have their AREF pin connected, and also run the ADC in free-run mode.
+	ADCSRB = 0x20;		    // There is an error in the defs, that has AREFEN = 4 instread of 5.  So hardcode it.
+#endif
+
+
 	// the bootloader connects pins 0 and 1 to the USART; disconnect them
 	// here so they can be used as normal digital i/o; they will be
 	// reconnected in Serial.begin()
@@ -388,5 +400,8 @@ void init()
 	UCSRB = 0;
 #elif defined(UCSR0B)
 	UCSR0B = 0;
+#elif defined(LINCR)
+    // Reset the LIN UART (AtmegaxxM1/C1) back to default parameters
+    sbi(LINCR, LSWRES);
 #endif
 }

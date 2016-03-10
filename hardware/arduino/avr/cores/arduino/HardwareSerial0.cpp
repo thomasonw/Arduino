@@ -20,6 +20,13 @@
   Modified 28 September 2010 by Mark Sproul
   Modified 14 August 2012 by Alarus
   Modified 3 December 2013 by Matthijs Kooijman
+  
+    Modified to support ATmega32M1, ATmega64M1, etc.   Mar 2016 
+    based on work from CODINGHEAD (Stuart Cording)
+        Al Thomason:   https://github.com/thomasonw/ATmegaxxM1-C1
+                       http://smartmppt.blogspot.com/search/label/xxM1-IDE
+                       
+                       
 */
 
 #include "Arduino.h"
@@ -42,6 +49,8 @@
   ISR(USART0_RX_vect)
 #elif defined(USART_RXC_vect)
   ISR(USART_RXC_vect) // ATmega8
+#elif defined(LIN_TC_vect)
+  ISR(LIN_TC_vect)      // ATmegaxxM1/C1
 #else
   #error "Don't know what the Data Received vector is called for Serial"
 #endif
@@ -49,6 +58,8 @@
     Serial._rx_complete_irq();
   }
 
+
+#if !defined(LINBRRH)
 #if defined(UART0_UDRE_vect)
 ISR(UART0_UDRE_vect)
 #elif defined(UART_UDRE_vect)
@@ -63,9 +74,13 @@ ISR(USART_UDRE_vect)
 {
   Serial._tx_udr_empty_irq();
 }
+#endif                          // !LIN_UART  -- Only one IRQ handler for the LIN UART, all is handled by the Rx one.
+
 
 #if defined(UBRRH) && defined(UBRRL)
   HardwareSerial Serial(&UBRRH, &UBRRL, &UCSRA, &UCSRB, &UCSRC, &UDR);
+#elif defined(LINBRRH)
+  HardwareSerial Serial(&LINBRRH, &LINBRRL, &LINSIR, &LINENIR, &LINCR, &LINDAT);
 #else
   HardwareSerial Serial(&UBRR0H, &UBRR0L, &UCSR0A, &UCSR0B, &UCSR0C, &UDR0);
 #endif

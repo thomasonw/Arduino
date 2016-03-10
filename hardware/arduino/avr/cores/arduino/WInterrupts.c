@@ -4,6 +4,13 @@
   Part of the Wiring project - http://wiring.uniandes.edu.co
 
   Copyright (c) 2004-05 Hernando Barragan
+  
+     
+  Modified to support ATmega32M1, ATmega64M1, etc.   Mar 2016  
+        Al Thomason:   https://github.com/thomasonw/ATmegaxxM1-C1
+                       http://smartmppt.blogspot.com/search/label/xxM1-IDE
+                    
+                    
 
   This library is free software; you can redistribute it and/or
   modify it under the terms of the GNU Lesser General Public
@@ -179,6 +186,20 @@ void attachInterrupt(uint8_t interruptNum, void (*userFunc)(void), int mode) {
       GIMSK |= (1 << INT2);
     #endif
       break;
+      
+    case 3:                                                                         // ATmegaxxM1's have 4 Arduino user IRQs
+    #if defined(EICRA) && defined(ISC30) && defined(ISC31) && defined(EIMSK)
+      EICRA = (EICRA & ~((1 << ISC30) | (1 << ISC31))) | (mode << ISC30);
+      EIMSK |= (1 << INT3);
+    #elif defined(MCUCR) && defined(ISC30) && defined(ISC31) && defined(GICR)
+      MCUCR = (MCUCR & ~((1 << ISC30) | (1 << ISC31))) | (mode << ISC30);
+      GICR |= (1 << INT3);
+    #elif defined(MCUCR) && defined(ISC30) && defined(GIMSK) && defined(GIMSK)
+      MCUCR = (MCUCR & ~((1 << ISC30) | (1 << ISC31))) | (mode << ISC30);
+      GIMSK |= (1 << INT3);
+    #endif
+      break;
+        
 #endif
     }
   }
@@ -266,7 +287,20 @@ void detachInterrupt(uint8_t interruptNum) {
     #elif defined(INT2)
       #warning detachInterrupt may need some more work for this cpu (case 2)
     #endif
-      break;       
+      break;
+      
+    case 3:
+    #if defined(EIMSK) && defined(INT3)
+      EIMSK &= ~(1 << INT3);
+    #elif defined(GICR) && defined(INT3)
+      GICR &= ~(1 << INT3); 
+    #elif defined(GIMSK) && defined(INT3)
+      GIMSK &= ~(1 << INT3);
+    #else
+      #warning detachInterrupt may need some more work for this cpu (case 3)
+    #endif
+      break;
+      
 #endif
     }
       

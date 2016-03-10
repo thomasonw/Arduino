@@ -3,6 +3,14 @@
   Part of Arduino - http://www.arduino.cc/
 
   Copyright (c) 2005-2006 David A. Mellis
+  
+     
+  Modified to support ATmega32M1, ATmega64M1, etc.   Mar 2016  
+        Al Thomason:   https://github.com/thomasonw/ATmegaxxM1-C1
+                       http://smartmppt.blogspot.com/search/label/xxM1-IDE
+                      
+
+
 
   This library is free software; you can redistribute it and/or
   modify it under the terms of the GNU Lesser General Public
@@ -32,6 +40,64 @@ void pinMode(uint8_t pin, uint8_t mode)
 	uint8_t port = digitalPinToPort(pin);
 	volatile uint8_t *reg, *out;
 
+     
+     
+#if defined (__AVR_ATmega32C1__) || defined(__AVR_ATmega64C1__) || defined(__AVR_ATmega16M1__) || defined(__AVR_ATmega32M1__) || defined(__AVR_ATmega64M1__)
+
+     
+        uint8_t b = POC;                                                // ATmegaxxM1 has its fuses set to disable all three PCS channels
+                POC = b;                                                // until there is a write to the POC register.  So, write back its contents
+                                                                        // to free these pins.  (Thank you K. Nankivell for helping ID this issue)
+
+    // AT: Setting up an Differential channel?
+    // AT: Using very crude and simple re-entrant calling of pinMode() to pre-configure physical ports...
+    if (pin == AD0){
+        pinMode (9, INPUT);                                             // AMP0 is D9-D8
+        pinMode (8, INPUT);
+        
+        DIDR1  |= (B00011000);                                          // Disable digitial inputs - to reduce noise
+        AMP0CSR = _BV(AMP0EN) | ((mode & 0x03) << 4);                   // Enable Diff-Amp AD0:  Free running, enabled, and gain = passed 'mode'
+        
+    } else if (pin == AD1){
+        pinMode (A4, INPUT);                                            // AMP1 is A4-A3
+        pinMode (A3, INPUT);
+
+        DIDR1  |= (B00000011);                                          // Disable digitial inputs - to reduce noise
+        AMP1CSR = _BV(AMP1EN) | ((mode & 0x03) << 4);                   // Enable Diff-Amp AD1:  Free running, enabled, and gain = passed 'mode'
+        
+    } else if (pin == AD2){
+        pinMode (10, INPUT);                                            // AMP2 is D10-A6
+        pinMode (A6, INPUT);
+
+        DIDR1  |= (B01000000);                                          // Disable digitial inputs - to reduce noise
+        DIDR0  |= (B01000000); 
+        AMP2CSR = _BV(AMP2EN) | ((mode & 0x03) << 4);                   // Enable Diff-Amp AD2:  Free running, enabled, and gain = passed 'mode'0
+        
+        
+        
+    } else {
+        
+        
+        if ((pin ==  8) || (pin ==  9)) {                               // Oh oh, are they coming in an re-defining a port that was configured as Differential?
+            AMP0CSR = 0;                                                // Yes, need to shut-down the Op Amp and release the input ports.
+            DIDR1  &= ~(B00011000);                                     // Re-enable digitial inputs
+        
+        } else if ((pin == A3) || (pin == A4)) {
+            AMP1CSR = 0; 
+            DIDR1  &= ~(B00000011); 
+           
+        } else if ((pin == 10) || (pin == A6)) {
+            AMP2CSR = 0; 
+            DIDR1  &= ~(B01000000);     
+            DIDR0  &= ~(B01000000);
+        }  
+    }
+      // AT: Continue with original code.
+#endif
+
+
+      
+      
 	if (port == NOT_A_PIN) return;
 
 	// JWS: can I let the optimizer do this?

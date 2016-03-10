@@ -3,6 +3,16 @@
   Part of Arduino - http://www.arduino.cc/
 
   Copyright (c) 2005-2006 David A. Mellis
+  
+  Modified to support ATmega32M1, ATmega64M1, etc.   Mar 2016  
+        Al Thomason:   https://github.com/thomasonw/ATmegaxxM1-C1
+                       http://smartmppt.blogspot.com/search/label/xxM1-IDE
+                      
+	Enabled analogWrite() to support DAC
+	Allow Analog read channel > 8
+	  including internal temp sensor, and differential ADC channels (See pins.h in variants)
+
+
 
   This library is free software; you can redistribute it and/or
   modify it under the terms of the GNU Lesser General Public
@@ -39,6 +49,29 @@ int analogRead(uint8_t pin)
 {
 	uint8_t low, high;
 
+
+#if defined (__AVR_ATmega32C1__) || defined(__AVR_ATmega64C1__) || defined(__AVR_ATmega16M1__) || defined(__AVR_ATmega32M1__) || defined(__AVR_ATmega64M1__)
+
+
+
+	if (pin == AD0)  sbi(AMP0CSR, AMP0EN); 						// If doing read on differnterial amps, make sure they have been started..
+	if (pin == AD1)  sbi(AMP1CSR, AMP1EN); 						// If doing read on differnterial amps, make sure they have been started..
+	if (pin == AD2)  sbi(AMP2CSR, AMP2EN); 						// If doing read on differnterial amps, make sure they have been started..
+                                                                // atmegaxxM1 modes AT
+
+
+
+	if  (pin >= 15) pin -= 15; 								    // allow for channel or pin numbers.  (Allows access to channers we have not defined)
+	if  (pin >= 14) return(0);									// Do not attempt to switch mux to reserved channels, seems to wedge chip...
+
+
+
+    #define wacPIN_MASK 0x1F                                            // 5-bit mask, allows for > 8 channels, including differential channels.
+#else
+    #define wacPIN_MASK 0x07                                           // Origional 4-bit mask used by everyone else...
+#endif
+
+ 
 #if defined(analogPinToChannel)
 #if defined(__AVR_ATmega32U4__)
 	if (pin >= 18) pin -= 18; // allow for channel or pin numbers
@@ -54,6 +87,7 @@ int analogRead(uint8_t pin)
 	if (pin >= 14) pin -= 14; // allow for channel or pin numbers
 #endif
 
+
 #if defined(ADCSRB) && defined(MUX5)
 	// the MUX5 bit of ADCSRB selects whether we're reading from channels
 	// 0 to 7 (MUX5 low) or 8 to 15 (MUX5 high).
@@ -64,8 +98,10 @@ int analogRead(uint8_t pin)
 	// channel (low 4 bits).  this also sets ADLAR (left-adjust result)
 	// to 0 (the default).
 #if defined(ADMUX)
-	ADMUX = (analog_reference << 6) | (pin & 0x07);
+	ADMUX = (analog_reference << 6) | (pin & wacPIN_MASK);
 #endif
+
+
 
 	// without a delay, we seem to read from the wrong channel
 	//delay(1);
@@ -99,6 +135,20 @@ int analogRead(uint8_t pin)
 // to digital output.
 void analogWrite(uint8_t pin, int val)
 {
+    
+     if (pin == DAC_PORT) {      
+        //  ATmegaxxM1 enhancment - enable the DAC via analogWrite.
+        //    This will force the port to an OUTPUT and then do a flash DAC conversion.
+        
+        DACON = ((1<<DAEN) | (1<<DAOE));                        // Enable DAC, enable its port as output.
+        
+        DACL  = val;                                            // Send the value out to the DAC (lower 8-bits). 
+        DACH = (val >> 8) & 0x03;                               // Writing to DACH causes the DAC to do its conversion.
+        return;
+    }
+    
+    
+    
 	// We need to make sure the PWM output is enabled for those pins
 	// that support it, as we turn it off when digitally reading or
 	// writing with them.  Also, make sure the pin is in output mode

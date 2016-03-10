@@ -20,6 +20,15 @@
   Modified 28 September 2010 by Mark Sproul
   Modified 14 August 2012 by Alarus
   Modified 3 December 2013 by Matthijs Kooijman
+  
+       
+  Modified to support ATmega32M1, ATmega64M1, etc.   Mar 2016 
+    based on work from CODINGHEAD (Stuart Cording)
+        Al Thomason:   https://github.com/thomasonw/ATmegaxxM1-C1
+                       http://smartmppt.blogspot.com/search/label/xxM1-IDE
+                    
+                    
+                    
 */
 
 #include <stdlib.h>
@@ -87,10 +96,12 @@ void HardwareSerial::_tx_udr_empty_irq(void)
 
   *_udr = c;
 
+  #if !defined(LINBRRH)
   // clear the TXC bit -- "can be cleared by writing a one to its bit
   // location". This makes sure flush() won't return until the bytes
   // actually got written
   sbi(*_ucsra, TXC0);
+  #endif                                                            // ATmegaxxM1/C1 clear this bit with _udr = c write above.
 
   if (_tx_buffer_head == _tx_buffer_tail) {
     // Buffer empty, so disable interrupts
@@ -102,6 +113,16 @@ void HardwareSerial::_tx_udr_empty_irq(void)
 
 void HardwareSerial::begin(unsigned long baud, byte config)
 {
+  #if defined(LINBRRH)
+    // Disable re-sync; 8-time bit sampling mode
+    LINBTR = 0x88;
+    // Use LINBTR LBTR[5:0] of 8 to calcualte baud rate
+    // NOTE: Baud rate is supposed to be very accurate
+    // so no need for complex checking like with normal
+    // mega USART
+     uint16_t baud_setting = (F_CPU / (8 * baud)) - 1;
+    
+  #else  
   // Try u2x mode first
   uint16_t baud_setting = (F_CPU / 4 / baud - 1) / 2;
   *_ucsra = 1 << U2X0;
@@ -117,6 +138,8 @@ void HardwareSerial::begin(unsigned long baud, byte config)
     baud_setting = (F_CPU / 8 / baud - 1) / 2;
   }
 
+  #endif
+  
   // assign the baud_setting, a.k.a. ubrr (USART Baud Rate Register)
   *_ubrrh = baud_setting >> 8;
   *_ubrrl = baud_setting;
@@ -127,10 +150,19 @@ void HardwareSerial::begin(unsigned long baud, byte config)
 #if defined(__AVR_ATmega8__)
   config |= 0x80; // select UCSRC register (shared with UBRRH)
 #endif
+
+#if defined(LINBRRH)
+  config |= ((1<<LCMD2) | (1<<LCMD1)| (1<<LCMD0) | (1<<LENA));              // Activate UART mode (instead of LIN mode) and turn Tx & Rx on.
+  LINSIR = 0x0F;						                            	    // Clear status and interrupt register bits
+  #endif
+  
+  
   *_ucsrc = config;
   
-  sbi(*_ucsrb, RXEN0);
-  sbi(*_ucsrb, TXEN0);
+  #if !defined(LINBRRH)
+    sbi(*_ucsrb, RXEN0);                                                    // For LIN, this was handled with the config variable above.
+    sbi(*_ucsrb, TXEN0);
+  #endif
   sbi(*_ucsrb, RXCIE0);
   cbi(*_ucsrb, UDRIE0);
 }
@@ -140,8 +172,13 @@ void HardwareSerial::end()
   // wait for transmission of outgoing data
   flush();
 
-  cbi(*_ucsrb, RXEN0);
-  cbi(*_ucsrb, TXEN0);
+  #if defined(LINBRRH)
+    cbi(*_ucsrc, RXEN0);                                                    // Lin UART uses a 2nd register for overall UART control
+    cbi(*_ucsrc, TXEN0);
+  #else
+    cbi(*_ucsrb, RXEN0);
+    cbi(*_ucsrb, TXEN0);
+  #endif
   cbi(*_ucsrb, RXCIE0);
   cbi(*_ucsrb, UDRIE0);
   
@@ -217,11 +254,20 @@ size_t HardwareSerial::write(uint8_t c)
   // to the data register and be done. This shortcut helps
   // significantly improve the effective datarate at high (>
   // 500kbit/s) bitrates, where interrupt overhead becomes a slowdown.
+  #if defined(LINBRRH)
+   //      delay(10);
+   if (_tx_buffer_head == _tx_buffer_tail && bit_is_clear(*_ucsrb, UDRIE0)) {
+        *_udr = c;                      			                // LIN is sitting idle.  And push the character out to get things kick-started. 
+        sbi(*_ucsrb, UDRIE0);                                       // Enable Tx completed interupt 
+        return 1;
+    }
+  #else
   if (_tx_buffer_head == _tx_buffer_tail && bit_is_set(*_ucsra, UDRE0)) {
     *_udr = c;
     sbi(*_ucsra, TXC0);
     return 1;
   }
+   #endif 
   tx_buffer_index_t i = (_tx_buffer_head + 1) % SERIAL_TX_BUFFER_SIZE;
 	
   // If the output buffer is full, there's nothing for it other than to 

@@ -19,6 +19,13 @@
   Modified 23 November 2006 by David A. Mellis
   Modified 28 September 2010 by Mark Sproul
   Modified 14 August 2012 by Alarus
+  
+  Modified to support ATmega32M1, ATmega64M1, etc.   Mar 2016 
+    based on work from CODINGHEAD (Stuart Cording)
+        Al Thomason:   https://github.com/thomasonw/ATmegaxxM1-C1
+                       http://smartmppt.blogspot.com/search/label/xxM1-IDE
+                    
+                    
 */
 
 #include "wiring_private.h"
@@ -58,6 +65,16 @@
 #define U2X0 U2X1
 #define UPE0 UPE1
 #define UDRE0 UDRE1
+#elif defined(LINBRRH) 
+  // ATmegaxxM1/C1
+#define TXC0 LTXOK                         
+#define RXEN0 LCMD1                   
+#define TXEN0 LCMD0              
+#define RXCIE0 LENRXOK                     
+#define UDRIE0 LENTXOK                     
+//!#define U2X0 zxcRU2X
+#define UPE0 LPERR                         
+#define UDRE0 LTXOK
 #else
 #error No UART found in HardwareSerial.cpp
 #endif
@@ -84,6 +101,21 @@
 
 // Constructors ////////////////////////////////////////////////////////////////
 
+#if defined(LINBRRH)
+HardwareSerial::HardwareSerial(
+  volatile uint8_t *linbrrh, volatile uint8_t *linbrrl,
+  volatile uint8_t *linsir, volatile uint8_t *linenir,
+  volatile uint8_t *lincr, volatile uint8_t *lindat) :
+    _ubrrh(linbrrh), _ubrrl(linbrrl),
+    _ucsra(linsir), _ucsrb(linenir), _ucsrc(lincr),
+    _udr(lindat),
+    _rx_buffer_head(0), _rx_buffer_tail(0),
+    _tx_buffer_head(0), _tx_buffer_tail(0)
+    
+    // Note that with the LIN, the Rx function handler will be called from the Tx IRQ hander, as
+    // there is only one interupt vector.
+    
+#else
 HardwareSerial::HardwareSerial(
   volatile uint8_t *ubrrh, volatile uint8_t *ubrrl,
   volatile uint8_t *ucsra, volatile uint8_t *ucsrb,
@@ -93,6 +125,9 @@ HardwareSerial::HardwareSerial(
     _udr(udr),
     _rx_buffer_head(0), _rx_buffer_tail(0),
     _tx_buffer_head(0), _tx_buffer_tail(0)
+ #endif // LINBRRH
+ 
+ 
 {
 }
 
@@ -100,6 +135,41 @@ HardwareSerial::HardwareSerial(
 
 void HardwareSerial::_rx_complete_irq(void)
 {
+#if defined(LINBRRH)
+	// Rx AND Tx interrupts are handled together here for the LIN Module in UART mode.
+    // So we need to figure out which one caused the IRQ and handle them both here..
+    
+    
+    if (bit_is_set(LINSIR, LRXOK)) {							                    // Is there also an Rx character to handle? 
+        unsigned char c = *_udr;
+        rx_buffer_index_t i = (unsigned int)(_rx_buffer_head + 1) % SERIAL_RX_BUFFER_SIZE;
+
+        // if we should be storing the received character into the location
+        // just before the tail (meaning that the head would advance to the
+        // current location of the tail), we're about to overflow the buffer
+        // and so we don't write the character or advance the head.
+        if (i != _rx_buffer_tail) {
+        _rx_buffer[_rx_buffer_head] = c;
+        _rx_buffer_head = i;
+        }
+    }
+    
+    
+	
+  	if (bit_is_set(LINSIR, LTXOK)) {                                            // Now, lets check to see if we arrived here because of a TX interrupt?
+        if (_tx_buffer_head != _tx_buffer_tail)                                 // Yes we did, and there are some characters in the buffer to send out.
+             _tx_udr_empty_irq();                                               // Go send them.
+        else {
+            cbi(*_ucsrb, UDRIE0);                                               // Buffer empty, so disable interrupts
+            sbi(*_ucsra, TXC0);                                                 // And clear this Tx flag that brought us here
+                                                                                // Need to do this check here, as _tx_udr_empty_irq() does not make the check before
+                                                                                // trying to send another character out...
+        }
+    }
+
+ #else  
+                                                                                // Origional Rx only code.
+
   if (bit_is_clear(*_ucsra, UPE0)) {
     // No Parity error, read byte and store it in the buffer if there is
     // room
@@ -118,6 +188,7 @@ void HardwareSerial::_rx_complete_irq(void)
     // Parity error, read byte but discard it
     *_udr;
   };
+  #endif 
 }
 
 #endif // whole file
