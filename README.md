@@ -7,6 +7,12 @@ AVR/CORE files.   Allowing updating to support the ATmegaxxM1/C1 line of UC's.
 * I  forked the entire IDE, as I am not aware of how to maintain only a subdirectory
 of a repository.   
 
+To see files: <https://github.com/arduino/Arduino/compare/master...thomasonw:master>
+
+To see changes to those files from the official Arduino source:
+  <https://github.com/arduino/Arduino/compare/master...thomasonw:master>
+
+
 
 =============
 =============
